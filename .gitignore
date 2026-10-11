@@ -1,0 +1,19 @@
+# Compiled binaries and build output
+*.exe
+*.o
+*.obj
+*.dll
+*.pdb
+*.ilk
+build/
+bin/
+
+# Debug and temporary files
+*.log
+*.tmp
+
+# IDE and operating system files
+.vs/
+.DS_Store
+Thumbs.db
+desktop.ini

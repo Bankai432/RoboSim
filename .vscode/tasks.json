@@ -1,0 +1,42 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "Build BlackHoleRenderer",
+            "command": "C:/msys64/ucrt64/bin/g++.exe",
+            "args": [
+                "-g",
+                "-std=c++17",
+
+                "${workspaceFolder}/src/main.cpp",
+                "${workspaceFolder}/src/glad.c",
+                "${workspaceFolder}/src/simulation/environment.cpp",
+                "${workspaceFolder}/src/rendering/shader.cpp",
+
+                "-I${workspaceFolder}/include",
+                "-IC:/msys64/ucrt64/include",
+
+                "-L${workspaceFolder}/lib",
+                "-L/C:/msys64/ucrt64/lib",
+
+                "-lglfw3",
+                "-lopengl32",
+                "-lgdi32",
+
+                "-o",
+                "${workspaceFolder}/bin/BlackHoleRenderer.exe"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
