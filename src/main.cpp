@@ -9,6 +9,10 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+void framebuffer_size_callback(GLFWwindow* window, int width, int height){
+    glViewport(0, 0, width, height);
+}
+
 int main(){
     if (!glfwInit()){
         std::cerr<<"Failed to initialize GLFW\n";
@@ -30,19 +34,19 @@ int main(){
         glfwTerminate();
         return 1;
     }
-    glViewport(0,0,800,800);
+    int width,height;
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwGetFramebufferSize(window, &width, &height);
+    framebuffer_size_callback(window, width, height);
     glEnable(GL_DEPTH_TEST);
 
     Environment env;
-    glm::mat4 model=glm::mat4(1.0f);
-    glm::mat4 view=glm::lookAt(
-        glm::vec3(4.0f,4.0f,4.0f),
-        glm::vec3(0.0f,0.0f,0.0f),  
-        glm::vec3(0.0f,1.0f,0.0f)  
-    );
 
-    glm::mat4 projection=glm::perspective(glm::radians(45.0f),800.0f/800.0f,0.1f,100.0f);
-
+    glm::mat4 groundModel=glm::mat4(1.0f);
+    groundModel=glm::translate(groundModel,glm::vec3(0.0f,-0.05f,0.0f));
+    groundModel=glm::scale(groundModel,glm::vec3(40.0f,0.1f,40.0f));
+    glm::mat4 projection=glm::perspective(glm::radians(45.0f),(float)width/(float)height,0.1f,100.0f);
+    
     float lastFrame=static_cast<float>(glfwGetTime());
     float printTimer=0.0f;
 
@@ -141,6 +145,11 @@ int main(){
 
     Shader shader("shaders/rect.vert","shaders/rect.frag");
 
+    const std::vector<Obstacle>& obstacles=env.getObstacles();
+    glm::vec3 offset(8.0f,8.0f,8.0f);
+    glm::vec3 cameraPosition=env.getRobot().position+offset;
+    const float cameraSpeed=4.0f;
+
     while (!glfwWindowShouldClose(window)){
 
         glfwPollEvents();
@@ -151,10 +160,34 @@ int main(){
         if(glfwGetKey(window,GLFW_KEY_D)==GLFW_PRESS) act=Action::RIGHT;
         if(glfwGetKey(window,GLFW_KEY_R)==GLFW_PRESS) env.reset();
 
-        float currFrame=static_cast<float>(glfwGetTime());    
+        float currFrame=static_cast<float>(glfwGetTime());
         float deltaTime=currFrame-lastFrame;
         lastFrame=currFrame;
+
         env.step(act,deltaTime);
+
+        const auto& position=env.getRobot().position;
+        const auto& targetposition=env.getTarget().position;
+        
+        glm::vec3 desiredCameraPosition=position+offset;
+        float smoothing=1.0f-std::exp(-cameraSpeed*deltaTime);
+        cameraPosition=glm::mix(cameraPosition,desiredCameraPosition,smoothing);
+        glm::mat4 view=glm::lookAt(cameraPosition,position,glm::vec3(0.0f,1.0f,0.0f));
+
+        glm::mat4 targetmodel=glm::mat4(1.0f);
+        targetmodel=glm::translate(targetmodel,glm::vec3(targetposition.x,0.5f,targetposition.z));
+        targetmodel=glm::scale(targetmodel,glm::vec3(0.1f,1.0f,0.1f));
+
+        glm::mat4 model=glm::mat4(1.0f);
+        model=glm::translate(model,glm::vec3(position.x,0.5f,position.z));
+        model=glm::rotate(model,(-1)*env.getRobot().yaw,glm::vec3(0.0f,1.0f,0.0f));
+        
+
+
+        glfwGetFramebufferSize(window, &width, &height);
+        if(height>0) projection=glm::perspective(glm::radians(45.0f),(float)width/(float)height,0.1f,100.0f);
+
+
         printTimer+=deltaTime;
         if(printTimer>=0.25f){
             const auto& robot=env.getRobot();
@@ -172,17 +205,45 @@ int main(){
 
         glClearColor(0.08f, 0.08f, 0.12f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
         shader.use();
+
+        GLint colorLoc=glGetUniformLocation(shader.ID,"objectColor");
         GLint modelLoc=glGetUniformLocation(shader.ID,"model");
         GLint viewLoc=glGetUniformLocation(shader.ID,"view");
         GLint projectionLoc=glGetUniformLocation(shader.ID,"projection");
 
-        glUniformMatrix4fv(modelLoc,1,GL_FALSE,glm::value_ptr(model));
         glUniformMatrix4fv(viewLoc,1,GL_FALSE,glm::value_ptr(view));
         glUniformMatrix4fv(projectionLoc,1,GL_FALSE,glm::value_ptr(projection));
 
         glBindVertexArray(VAO);
+
+        glUniform3f(colorLoc,0.9f,0.9f,0.9f);
+        glUniformMatrix4fv(modelLoc,1,GL_FALSE,glm::value_ptr(groundModel));
         glDrawArrays(GL_TRIANGLES,0,36);
+
+        if(env.isSuccess()) glUniform3f(colorLoc,0.0f,1.0f,0.0f);
+        else if(env.isCollision()) glUniform3f(colorLoc,1.0f,0.0f,0.0f);
+        else glUniform3f(colorLoc,0.3f,0.5f,0.5f);
+
+        glUniformMatrix4fv(modelLoc,1,GL_FALSE,glm::value_ptr(model));
+        glDrawArrays(GL_TRIANGLES,0,36);
+
+        glUniform3f(colorLoc,1.0f,0.1f,0.1f);
+        glUniformMatrix4fv(modelLoc,1,GL_FALSE,glm::value_ptr(targetmodel));
+        glDrawArrays(GL_TRIANGLES,0,36);
+        
+        for(const auto& obstacle : obstacles) {
+            glm::mat4 obstaclemodel=glm::mat4(1.0f);
+            obstaclemodel=glm::translate(obstaclemodel,obstacle.position);
+            obstaclemodel=glm::scale(obstaclemodel,obstacle.size);
+        
+            glUniform3f(colorLoc,0.9f,0.5f,0.4f);
+            glUniformMatrix4fv(modelLoc,1,GL_FALSE,glm::value_ptr(obstaclemodel));
+            glDrawArrays(GL_TRIANGLES,0,36);    
+        }
+
+        glBindVertexArray(0);
         glfwSwapBuffers(window);
     }
     std::cout<<'\n';

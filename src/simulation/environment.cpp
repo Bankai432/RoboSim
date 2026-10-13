@@ -1,5 +1,6 @@
 #include "Environment.h"
 #include <cmath>
+#include <algorithm>
 
 Environment::Environment(){
     reset();
@@ -11,7 +12,7 @@ void Environment::reset(){
     robot.position=glm::vec3(0.0f,0.5f,0.0f);
     robot.yaw=0.0f;
 
-    target.position=glm::vec3(5.0f,0.5f,-5.0f);
+    target.position=glm::vec3(3.0f,0.5f,3.0f);
 
     obstacles.clear();
 
@@ -60,17 +61,22 @@ void Environment::step(Action action,float deltaTime){
 }
 
 bool Environment::checkCollision(glm::vec3 position) const{
-    const float robotRadius=0.25f;
+    const float robotRadius=0.5f;
 
     for (const auto& obstacle:obstacles){
-        float dx=position.x-obstacle.position.x;
-        float dz=position.z-obstacle.position.z;
+        float minX=obstacle.position.x-obstacle.size.x*0.5f;
+        float maxX=obstacle.position.x+obstacle.size.x*0.5f;
 
-        float obstacleRadius=0.5f*std::max(obstacle.size.x,obstacle.size.z);
+        float minZ=obstacle.position.z-obstacle.size.z*0.5f;
+        float maxZ=obstacle.position.z+obstacle.size.z*0.5f;
 
-        float distanceSquared=dx*dx+dz*dz;
-        float minimumDistance=robotRadius+obstacleRadius;
-        if(distanceSquared<minimumDistance*minimumDistance) {
+        float closestX=std::max(minX,std::min(position.x,maxX));
+        float closestZ=std::max(minZ,std::min(position.z,maxZ));
+
+        float dx=position.x-closestX;
+        float dz=position.z-closestZ;
+
+        if(dx*dx+dz*dz<robotRadius*robotRadius){
             return true;
         }
     }

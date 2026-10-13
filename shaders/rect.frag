@@ -4,8 +4,9 @@
 in vec3 Normal;
 out vec4 FragColor;
 
+uniform vec3 objectColor;
+
 void main(){
-    vec3 baseColor=vec3(0.5, 0.5, 0.5);
     vec3 lightDir=normalize(vec3(-0.5,1.0,0.3));
 
     vec3 N=normalize(Normal);
@@ -14,5 +15,5 @@ void main(){
     float ambient=0.20;
     float brightness=ambient+0.80*diffuse;
 
-    FragColor=vec4(baseColor*brightness,1.0);
+    FragColor=vec4(objectColor*brightness,1.0);
 }
