@@ -2,6 +2,7 @@
 
 #include <glm/glm.hpp>
 #include <vector>
+#include "observation.h"
 
 struct Robot{
     glm::vec3 position;
@@ -37,6 +38,7 @@ public:
     const Robot& getRobot() const;
     const Target& getTarget() const;
     const std::vector<Obstacle>& getObstacles() const;
+    Observation observe() const;
 
 private:
     Robot robot;
@@ -46,4 +48,5 @@ private:
     bool checkCollision(glm::vec3 position) const;
     bool checkSuccess() const;
     std::vector<Obstacle> obstacles;
+    float castRay(float relativeAngle, float maxRange) const;
 };

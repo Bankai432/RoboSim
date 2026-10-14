@@ -8,9 +8,11 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <algorithm>
+#include "simulation/Agent.h"
 
-void framebuffer_size_callback(GLFWwindow* window, int width, int height){
-    glViewport(0, 0, width, height);
+void framebuffer_size_callback(GLFWwindow* window,int width,int height){
+    glViewport(0,0,width,height);
 }
 
 int main(){
@@ -142,6 +144,35 @@ int main(){
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+    
+
+    GLuint rayVAO,rayVBO,rayNormalVBO;
+    glGenVertexArrays(1,&rayVAO);
+    glGenBuffers(1,&rayVBO);
+    glGenBuffers(1,&rayNormalVBO);
+
+    glBindVertexArray(rayVAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER,rayVBO);
+    glBufferData(GL_ARRAY_BUFFER,10*3*sizeof(float),nullptr,GL_DYNAMIC_DRAW);
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,3*sizeof(float),(void*)0);
+    glEnableVertexAttribArray(0);
+
+    float rayNormals[30];
+    for (int i=0;i<10;i++) {
+        rayNormals[i*3+0]=0.0f;
+        rayNormals[i*3+1]=1.0f;
+        rayNormals[i*3+2]=0.0f;
+    }
+
+    glBindBuffer(GL_ARRAY_BUFFER,rayNormalVBO);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(rayNormals),rayNormals,GL_STATIC_DRAW);
+    glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,3*sizeof(float),(void*)0);
+    glEnableVertexAttribArray(1);
+
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER,0);
+
 
     Shader shader("shaders/rect.vert","shaders/rect.frag");
 
@@ -149,6 +180,11 @@ int main(){
     glm::vec3 offset(8.0f,8.0f,8.0f);
     glm::vec3 cameraPosition=env.getRobot().position+offset;
     const float cameraSpeed=4.0f;
+
+    const float SIM_DT=0.01f;
+    float accumulator=0.0f;
+
+    Agent agent;
 
     while (!glfwWindowShouldClose(window)){
 
@@ -163,12 +199,52 @@ int main(){
         float currFrame=static_cast<float>(glfwGetTime());
         float deltaTime=currFrame-lastFrame;
         lastFrame=currFrame;
+        deltaTime=std::min(deltaTime,0.25f);
 
-        env.step(act,deltaTime);
+        accumulator+=deltaTime;
+        while(accumulator>=SIM_DT){
+            Observation obs=env.observe();
+            Action agentAction=agent.chooseAct(obs);
+            env.step(agentAction,SIM_DT);
+            accumulator-=SIM_DT;
+            //env.step(act,SIM_DT);
+            //accumulator-=SIM_DT;
+        }
+
+        Observation obs=env.observe();
 
         const auto& position=env.getRobot().position;
         const auto& targetposition=env.getTarget().position;
         
+        constexpr float MAX_RAY_RANGE=5.0f;
+        const float rayAngles[5]={
+            -1.5707963f,  // Left
+            -0.7853982f,  // Front-left
+            0.0f,        // Forward
+            0.7853982f,  // Front-right
+            1.5707963f   // Right
+        };
+
+        float rayVertices[30];
+
+        for(int i=0;i<5;i++){
+            const float distance=obs.rayDistances[i];
+            const float angle=env.getRobot().yaw+rayAngles[i];
+            const int start=i*6;
+
+            rayVertices[start+0]=position.x;
+            rayVertices[start+1]=position.y+0.15f;
+            rayVertices[start+2]=position.z;
+
+            rayVertices[start+3]=position.x+std::sin(angle)*distance;
+            rayVertices[start+4]=position.y+0.15f;
+            rayVertices[start+5]=position.z-std::cos(angle)*distance;
+        }
+
+        glBindBuffer(GL_ARRAY_BUFFER,rayVBO);
+        glBufferSubData(GL_ARRAY_BUFFER,0,sizeof(rayVertices),rayVertices);
+        glBindBuffer(GL_ARRAY_BUFFER,0);
+
         glm::vec3 desiredCameraPosition=position+offset;
         float smoothing=1.0f-std::exp(-cameraSpeed*deltaTime);
         cameraPosition=glm::mix(cameraPosition,desiredCameraPosition,smoothing);
@@ -242,6 +318,21 @@ int main(){
             glUniformMatrix4fv(modelLoc,1,GL_FALSE,glm::value_ptr(obstaclemodel));
             glDrawArrays(GL_TRIANGLES,0,36);    
         }
+
+        glBindVertexArray(rayVAO);
+
+        glm::mat4 identityModel(1.0f);
+        glUniformMatrix4fv(modelLoc,1,GL_FALSE,glm::value_ptr(identityModel));
+        glLineWidth(2.0f);
+
+        for(int i=0;i<5;i++){
+            if(obs.rayDistances[i]<MAX_RAY_RANGE-0.01f) glUniform3f(colorLoc,1.0f,0.2f,0.2f);
+            else glUniform3f(colorLoc, 0.2f, 1.0f, 0.3f);
+
+            glDrawArrays(GL_LINES,i*2,2);
+        }
+        glLineWidth(3.0f);
+        glBindVertexArray(0);
 
         glBindVertexArray(0);
         glfwSwapBuffers(window);

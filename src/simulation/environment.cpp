@@ -17,17 +17,40 @@ void Environment::reset(){
     obstacles.clear();
 
     obstacles.push_back({
-        glm::vec3(2.0f,0.5f,-2.0f),
+        glm::vec3(2.0f,0.5f,2.0f),
         glm::vec3(1.0f,1.0f,1.0f)
     });
 
     obstacles.push_back({
-        glm::vec3(-2.0f, 0.5f,-4.0f),
+        glm::vec3(-5.0f, 0.5f,-4.0f),
         glm::vec3(1.0f,1.0f,2.0f)
     });
     obstacles.push_back({
         glm::vec3(0.0f,0.5f,-3.85f),
         glm::vec3(1.0f,1.0f,1.0f)
+    });
+    // North wall (-Z)
+    obstacles.push_back({
+        glm::vec3(0.0f, 0.5f, -20.0f),
+        glm::vec3(40.0f, 1.0f, 0.5f)
+    });
+
+    // South wall (+Z)
+    obstacles.push_back({
+        glm::vec3(0.0f, 0.5f, 20.0f),
+        glm::vec3(40.0f, 1.0f, 0.5f)
+    });
+
+    // West wall (-X)
+    obstacles.push_back({
+        glm::vec3(-20.0f, 0.5f, 0.0f),
+        glm::vec3(0.5f, 1.0f, 40.0f)
+    });
+
+    // East wall (+X)
+    obstacles.push_back({
+        glm::vec3(20.0f, 0.5f, 0.0f),
+        glm::vec3(0.5f, 1.0f, 40.0f)
     });
 }
 void Environment::step(Action action,float deltaTime){
@@ -108,4 +131,72 @@ const Target& Environment::getTarget() const{
 
 const std::vector<Obstacle>& Environment::getObstacles() const{
     return obstacles;
+}
+
+
+float Environment::castRay(float relativeAngle, float maxRange) const{
+
+    const float rayYaw=robot.yaw+relativeAngle;
+
+    const float dirX=sin(rayYaw);
+    const float dirZ=-cos(rayYaw);
+
+    float nearest=maxRange;
+    for(auto const & obstacle:obstacles){
+        const float minX=obstacle.position.x-obstacle.size.x*0.5f;
+        const float maxX=obstacle.position.x+obstacle.size.x*0.5f;
+        const float minZ=obstacle.position.z-obstacle.size.z*0.5f;
+        const float maxZ=obstacle.position.z+obstacle.size.z*0.5f;        
+        float tMin=0.0f;
+        float tMax=maxRange;
+        bool intersects=true;
+        
+        if(std::abs(dirX)<1e-6f && (robot.position.x<minX || robot.position.x>maxX)) intersects=false;
+        else{
+            float t1=(minX-robot.position.x)/dirX;
+            float t2=(maxX-robot.position.x)/dirX;
+
+            if(t1>t2) std::swap(t1,t2);
+            tMin=std::max(tMin,t1);
+            tMax=std::min(tMax,t2);
+
+            if(tMin>tMax) intersects=false;
+        }
+
+        if(!intersects)continue;
+
+        if(std::abs(dirZ)<1e-6f && (robot.position.z<minZ || robot.position.z>maxZ)) intersects=false;
+        else{
+            float t1=(minZ-robot.position.z)/dirZ;
+            float t2=(maxZ-robot.position.z)/dirZ;
+
+            if (t1>t2) std::swap(t1,t2);
+            tMin=std::max(tMin,t1);
+            tMax=std::min(tMax,t2);
+
+            if(tMin>tMax) intersects=false;
+        }
+        if(intersects && tMax>=0.0f && tMin<=maxRange) nearest=std::min(nearest,tMin);
+    }
+    return nearest;
+}
+
+Observation Environment::observe() const{
+    Observation obs{};
+
+    constexpr float MAX_RANGE=5.0f;
+
+    const std::array<float, 5> angles={
+        -1.5707963f,  // -90 degrees
+        -0.7853982f,  // -45 degrees
+         0.0f,        // forward
+         0.7853982f,  // +45 degrees
+         1.5707963f   // +90 degrees
+    };
+
+    for(std::size_t i=0;i<angles.size();i++) {
+        obs.rayDistances[i]=castRay(angles[i],MAX_RANGE);
+    }
+
+    return obs;
 }

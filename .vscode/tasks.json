@@ -12,6 +12,7 @@
                 "${workspaceFolder}/src/main.cpp",
                 "${workspaceFolder}/src/glad.c",
                 "${workspaceFolder}/src/simulation/environment.cpp",
+                "${workspaceFolder}/src/simulation/Agent.cpp",
                 "${workspaceFolder}/src/rendering/shader.cpp",
 
                 "-I${workspaceFolder}/include",
