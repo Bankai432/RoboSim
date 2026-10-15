@@ -1,58 +1,72 @@
 # RoboSim Lite
 
-RoboSim Lite is a lightweight robotics simulation prototype built with C++ and OpenGL. It combines a time-stepped simulation environment, a real-time 3D renderer, and a restricted sensor interface for experimenting with sensor-driven autonomous navigation.
+RoboSim Lite is a lightweight robotics simulation prototype built with C++ and OpenGL. It combines a time-stepped simulation environment, a real-time 3D renderer, configurable range sensing, and a reactive agent interface for experimenting with sensor-driven navigation.
+
+The project is designed around a separation between simulation state, agent observations, discrete actions, and visualization.
 
 ## Current Milestone
 
-**Deterministic simulation, sensor integration, and reactive control**
+**Integrated simulation, fixed-step updates, range sensing, and sensor visualization.**
 
-The environment supports robot movement, obstacle collisions, target detection, reset functionality, and simulated range sensing. A reactive agent consumes observations and selects actions through a defined interface. The renderer visualizes the environment and sensor readings.
+The environment supports robot movement, obstacle collision detection, target detection, reset functionality, and configurable ray-based sensing. A reactive agent can select actions from sensor observations, while the OpenGL renderer visualizes the environment and measured sensor distances.
 
-### Implemented Features
+The simulation and agent interfaces are implemented, but the graphical application currently uses keyboard input to control the robot. Autonomous agent control is not yet connected to the active simulation loop.
 
-**Simulation**
+## Implemented Features
+
+### Simulation
+
 - Robot state represented by position and heading.
-- Fixed-step simulation updates using a configurable timestep.
-- Forward movement and left/right rotation.
-- Obstacle collision detection using circle-versus-AABB intersection in the XZ plane.
+- Fixed-step simulation updates using a timestep of 0.01 seconds.
+- Discrete actions for forward movement, left rotation, right rotation, and stopping.
+- Collision detection using circle-versus-axis-aligned bounding box intersection in the XZ plane.
 - Goal detection and environment reset functionality.
 - Collision and success state tracking.
 - Enclosed environment with perimeter walls.
+- Candidate-state validation before committing movement, preventing invalid movement through detected obstacles.
 
-**Sensing and Agent Interface**
-- Five-ray range sensor with relative angles of −90°, −45°, 0°, +45°, and +90°.
-- Ray–axis-aligned bounding box intersection tests to estimate obstacle distances.
-- Configurable maximum sensing range.
-- Observation structure containing the five ray distances.
-- Reactive agent that maps observations to discrete actions.
-- Agent decisions are separated from direct access to the environment's internal state.
+### Sensing and Agent Interface
 
-**Rendering**
+- Configurable ray-based range sensing.
+- Current configuration: 16 rays spanning a 180-degree field of view, with a maximum range of 8 world units.
+- Ray–axis-aligned bounding box intersection tests to estimate the distance to the nearest obstacle.
+- Observation structure containing ray-distance measurements.
+- Reactive agent interface that maps observations to discrete actions.
+- Separation between agent observations and the environment's internal state.
+- Sensor measurements shared between the simulation interface and the renderer.
+
+The agent receives range measurements rather than direct access to the environment's complete obstacle list or world state. The current observation does not provide target-relative information.
+
+### Rendering
+
 - OpenGL context and GLSL shader initialization.
-- VAO/VBO configuration and reusable 3D cube geometry with surface normals.
+- Vertex array and vertex buffer configuration.
+- Reusable cube geometry with surface normals.
 - Model, view, and perspective projection transformations.
 - Depth-buffer-based visibility.
-- Ground plane, robot, target, obstacles, and perimeter walls rendered from simulation state.
-- Smoothed camera following the robot.
+- Ground grid and environment objects rendered from simulation state.
+- Robot, target, obstacles, and perimeter walls.
+- Camera following the robot.
 - Framebuffer resizing and viewport updates.
-- Dynamic visualization of the five sensor rays, using measured sensor distances.
+- Dynamic sensor-ray geometry updated using measured distances.
 
-**Lighting and Visual Feedback**
+### Lighting and Visual Feedback
+
 - Basic ambient and Lambertian diffuse lighting.
 - Configurable object colors through shader uniforms.
 - Robot color changes based on collision and success state.
-- Distinct visual colors for the target and obstacles.
-- Sensor-ray colors distinguish obstacle detections from maximum-range readings.
+- Distinct colors for the target and obstacles.
+- Sensor-ray colors distinguish detected obstacles from rays that reach their maximum sensing range.
 
 ## Technology Stack
 
-- **Language:** C++
+- **Language:** C++17
 - **Graphics API:** OpenGL
 - **Windowing:** GLFW
 - **OpenGL function loading:** GLAD
 - **Linear algebra:** GLM
 - **Shaders:** GLSL
-- **Build environment:** MSYS2 UCRT64, GCC, and VS Code
+- **Build environment:** Windows, MSYS2 UCRT64, GCC, and VS Code
 
 ## Architecture
 
@@ -60,29 +74,37 @@ The environment supports robot movement, obstacle collisions, target detection, 
 
 The `Environment` component owns the robot state, target, obstacle data, collision logic, success detection, sensing, and reset behavior.
 
-Simulation transitions occur through `Environment::step(action, dt)`. A fixed-step accumulator in the application loop separates simulation update frequency from rendering frequency, reducing dependence on variable frame times.
+Simulation transitions occur through:
 
-Collision detection operates in the XZ plane. The robot is approximated by a circle and obstacles by axis-aligned bounding boxes. Proposed movement is checked before the new robot state is committed.
+`Environment::step(action, dt)`
+
+The graphical application uses a fixed-step accumulator to advance the simulation independently of the rendering frame rate. This reduces dependence on variable frame times.
+
+Collision detection operates in the XZ plane. The robot is approximated by a circle and obstacles by axis-aligned bounding boxes. Proposed movement is checked before the updated robot state is committed.
 
 ### Observation and Sensing
 
-The environment exposes an `Observation` containing five ray distances. Each ray is defined relative to the robot's current heading and returns the distance to the nearest intersected obstacle, capped at the configured maximum range.
+The environment exposes an `Observation` containing ray-distance measurements. Rays are defined relative to the robot's heading and return the distance to the nearest intersected obstacle, capped at the configured maximum range.
 
-The observation interface deliberately exposes less information than the environment internally maintains. The agent receives range measurements rather than direct access to the robot's coordinates, target coordinates, or obstacle list.
+The sensor configuration controls the number of rays, field of view, and maximum sensing distance. The current graphical application uses 16 rays over a 180-degree field of view, with a maximum range of 8 world units.
 
-The same observations drive the sensor-ray visualization, allowing the displayed rays to reflect the distances available to the agent.
+The observation interface deliberately exposes less information than the environment internally maintains. This provides a foundation for evaluating controllers that operate on limited sensor information instead of direct access to the complete simulation state.
 
-### Agent and Action Loop
+The renderer uses the same sensor measurements to update the displayed ray endpoints.
 
-The control loop follows this sequence:
+### Agent and Control Loop
+
+The intended autonomous control loop is:
 
 1. The environment produces an observation.
-2. The agent selects an action from the observation.
+2. The agent selects a discrete action from that observation.
 3. The environment applies the action for one simulation timestep.
 4. Collision and success conditions are updated.
 5. The renderer displays the resulting state and sensor readings.
 
-The current agent is a simple reactive baseline, not a learned policy or a complete navigation algorithm. Its purpose is to exercise the observation-to-action interface and provide a starting point for future controllers.
+The reactive agent interface is implemented, but the autonomous action application is not currently active in the main graphical loop. Keyboard input remains the active controller.
+
+The agent is a rule-based baseline, not a learned policy or a complete navigation algorithm. Connecting the agent to the simulation loop and evaluating its behavior across different environments remain future tasks.
 
 ### Rendering Pipeline
 
@@ -94,7 +116,7 @@ The current agent is a simple reactive baseline, not a learned policy or a compl
 6. Rasterization generates fragments, with depth testing resolving visibility.
 7. Fragment shading applies ambient and diffuse lighting and the object's configured color.
 
-The renderer reuses cube geometry for the robot, target, and obstacles. Sensor rays use a separate dynamic vertex buffer so their endpoints can be updated as the robot moves and turns.
+The renderer reuses cube geometry for environment objects. Sensor rays use a separate dynamic vertex buffer so their endpoints can be updated as the robot moves and turns.
 
 ### Lighting
 
@@ -104,63 +126,68 @@ Shadows, specular highlights, and physically based materials are not currently i
 
 ## Reliability Checks
 
-The current implementation has undergone the following manual checks:
+The implementation has been manually tested for the following behaviors:
 
-- **Repeated-run consistency:** Three 30-second autonomous runs produced identical final robot X/Z positions and yaw.
-- **Reset consistency:** Resetting the environment and repeating a 30-second run reproduced the same final values.
-- **Collision behavior:** Manual tests against obstacles and walls showed no improper simulation penetration. Slight visual overlap can occur because the rendered geometry and simplified collision footprint do not match exactly.
-- **Sensor consistency:** Repeated observations in the same scenario produced identical ray-distance readings.
+- **Collision behavior:** Movement into obstacles is rejected by the simulation collision checks.
+- **Goal detection:** Entering the target's detection radius sets the success state.
+- **Reset behavior:** Reset restores the default robot state and environment configuration.
+- **Sensor consistency:** Repeated observations in an unchanged scenario produce identical ray-distance measurements.
+- **Simulation repeatability:** Repeated runs under identical initial conditions and action sequences produce consistent simulation results.
 
-These results support deterministic behavior under the tested conditions. They do not constitute exhaustive automated testing or a formal guarantee across platforms and execution conditions.
+These checks support deterministic behavior for the tested scenarios. They do not constitute exhaustive automated testing or a formal guarantee across platforms and execution conditions. Rendering differences are also possible independently of simulation determinism.
 
 ## Controls
 
 | Key | Action |
 |---|---|
-| `W` | Move forward manually |
-| `A` | Turn left manually |
-| `D` | Turn right manually |
+| `W` | Move forward |
+| `A` | Turn left |
+| `D` | Turn right |
 | `R` | Reset the environment |
 
-The current main loop uses the autonomous agent to select simulation actions. Manual movement keys are therefore not currently the active controller unless manual control is re-enabled in the loop.
+Keyboard input currently controls the simulation. The reactive agent is not yet the active controller in the graphical application.
 
 ## Build Requirements
 
 The current development setup uses Windows, MSYS2 UCRT64, GCC, and VS Code.
 
 Dependencies:
-- A compatible C++ compiler
+
+- A compatible C++17 compiler
 - GLFW
 - GLAD
 - GLM
 - OpenGL support
 
-Configure the compiler, include paths, and linker settings for the installed dependencies. Build the application using the configured VS Code build task. Run the executable from the project root so relative shader paths resolve correctly.
+Configure the compiler, include paths, and linker settings for the installed dependencies. Build the application using the configured VS Code build task.
 
-Ensure that all simulation source files, including `Agent.cpp`, are included in the build configuration.
+Run the executable from the project root so relative shader paths resolve correctly. Ensure that all required simulation and rendering source files, including `Agent.cpp`, are included in the build configuration.
 
 ## Current Limitations
 
-- The agent uses a simple reactive policy and is not expected to solve every navigation scenario.
-- The agent has no persistent memory or internal map and does not receive target-relative information.
-- The five-ray sensor provides sparse range measurements and can miss obstacles between ray directions.
+- The reactive agent is not yet connected to the active graphical control loop.
+- The baseline agent is rule-based and is not expected to solve every navigation scenario.
+- The agent has no persistent memory or internal map.
+- The observation contains sparse range measurements and no target-relative information.
+- Obstacles between ray directions may be missed by the sensor.
 - The robot's circular collision footprint does not exactly match its rendered geometry.
-- Collision handling uses discrete movement checks and may require further work for high-speed motion.
-- The current application loop integrates simulation and rendering; a standalone headless evaluation runner has not yet been established.
-- Reliability checks are currently manual rather than part of an automated test suite.
+- Discrete collision checks may require further work for high-speed motion and more complex collision scenarios.
+- Simulation and rendering are integrated in the graphical application; a standalone headless evaluation runner has not yet been established.
+- Reliability checks are manual rather than part of an automated test suite.
 - The lighting model is limited to ambient and diffuse contributions.
 
 ## Planned Work
 
-1. Separate simulation execution from the graphical application to support headless evaluation.
-2. Formalize episode termination and reset semantics.
-3. Add automated tests for deterministic stepping, collision invariants, reset behavior, and sensor consistency.
-4. Evaluate navigation policies across different obstacle layouts and target positions.
-5. Extend the observation and control interfaces as needed for future search-based or learned agents.
-6. Improve collision geometry and rendering where they support the simulator's core objective.
+1. Connect the reactive agent to the simulation loop and make autonomous control selectable independently of manual input.
+2. Separate simulation execution from the graphical application to support headless evaluation.
+3. Formalize episode termination and reset semantics.
+4. Add automated tests for deterministic stepping, collision invariants, reset behavior, and sensor consistency.
+5. Evaluate navigation policies across different obstacle layouts and target positions.
+6. Extend the observation and control interfaces as needed for search-based or learned agents.
+7. Improve collision handling and rendering where they support the simulator's core objectives.
 
 ## Project Status
 
-**Current milestone:** Integrated simulation, fixed-step updates, range sensing, reactive control, and sensor visualization.
+**Current milestone:** Integrated simulation, fixed-step updates, configurable range sensing, reactive agent interface, and sensor visualization.
 
-**Next milestone:** Headless evaluation and systematic testing of the environment interface and navigation policies.
+**Next milestone:** Connect autonomous control, establish headless evaluation, and systematically test the environment and navigation policies.
