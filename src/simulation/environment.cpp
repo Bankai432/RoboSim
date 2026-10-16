@@ -1,6 +1,7 @@
 #include "Environment.h"
 #include <cmath>
 #include <algorithm>
+#include <stdexcept>
 
 Environment::Environment(){
     reset();
@@ -12,42 +13,77 @@ void Environment::reset(){
     robot.position=glm::vec3(0.0f,0.5f,0.0f);
     robot.yaw=0.0f;
 
-    target.position=glm::vec3(3.0f,0.5f,3.0f);
+    target.position=glm::vec3(-5.7f,0.5f,4.0f);
 
     obstacles.clear();
 
+    // Central obstacle
     obstacles.push_back({
-        glm::vec3(2.0f,0.5f,2.0f),
-        glm::vec3(1.0f,1.0f,1.0f)
+        glm::vec3(2.0f, 0.5f, 2.0f),
+        glm::vec3(1.5f, 1.0f, 1.5f)
+    });
+
+    // Upper-left area: staggered barriers
+    obstacles.push_back({
+        glm::vec3(-5.0f, 0.5f, -4.0f),
+        glm::vec3(1.0f, 1.0f, 5.0f)
     });
 
     obstacles.push_back({
-        glm::vec3(-5.0f, 0.5f,-4.0f),
-        glm::vec3(1.0f,1.0f,2.0f)
+        glm::vec3(-2.0f, 0.5f, -7.0f),
+        glm::vec3(5.0f, 1.0f, 1.0f)
     });
+
+    // Upper-middle: partial corridor
     obstacles.push_back({
-        glm::vec3(0.0f,0.5f,-3.85f),
-        glm::vec3(1.0f,1.0f,1.0f)
+        glm::vec3(3.0f, 0.5f, -7.0f),
+        glm::vec3(1.0f, 1.0f, 6.0f)
     });
-    // North wall (-Z)
+
+    obstacles.push_back({
+        glm::vec3(7.0f, 0.5f, -3.0f),
+        glm::vec3(5.0f, 1.0f, 1.0f)
+    });
+
+    // Lower-left: offset passage
+    obstacles.push_back({
+        glm::vec3(-8.0f, 0.5f, 3.0f),
+        glm::vec3(1.0f, 1.0f, 8.0f)
+    });
+
+    obstacles.push_back({
+        glm::vec3(-5.0f, 0.5f, 7.0f),
+        glm::vec3(5.0f, 1.0f, 1.0f)
+    });
+
+    // Lower-middle: isolated obstacle
+    obstacles.push_back({
+        glm::vec3(1.0f, 0.5f, 8.0f),
+        glm::vec3(2.0f, 1.0f, 2.0f)
+    });
+
+    // Right side: staggered barriers
+    obstacles.push_back({
+        glm::vec3(10.0f, 0.5f, 5.0f),
+        glm::vec3(1.0f, 1.0f, 7.0f)
+    });
+
+    obstacles.push_back({
+        glm::vec3(6.0f, 0.5f, 10.0f),
+        glm::vec3(7.0f, 1.0f, 1.0f)
+    });
     obstacles.push_back({
         glm::vec3(0.0f, 0.5f, -20.0f),
         glm::vec3(40.0f, 1.0f, 0.5f)
     });
-
-    // South wall (+Z)
     obstacles.push_back({
         glm::vec3(0.0f, 0.5f, 20.0f),
         glm::vec3(40.0f, 1.0f, 0.5f)
     });
-
-    // West wall (-X)
     obstacles.push_back({
         glm::vec3(-20.0f, 0.5f, 0.0f),
         glm::vec3(0.5f, 1.0f, 40.0f)
     });
-
-    // East wall (+X)
     obstacles.push_back({
         glm::vec3(20.0f, 0.5f, 0.0f),
         glm::vec3(0.5f, 1.0f, 40.0f)
@@ -86,7 +122,7 @@ void Environment::step(Action action,float deltaTime){
 bool Environment::checkCollision(glm::vec3 position) const{
     const float robotRadius=0.5f;
 
-    for (const auto& obstacle:obstacles){
+    for(const auto& obstacle:obstacles){
         float minX=obstacle.position.x-obstacle.size.x*0.5f;
         float maxX=obstacle.position.x+obstacle.size.x*0.5f;
 
@@ -99,9 +135,7 @@ bool Environment::checkCollision(glm::vec3 position) const{
         float dx=position.x-closestX;
         float dz=position.z-closestZ;
 
-        if(dx*dx+dz*dz<robotRadius*robotRadius){
-            return true;
-        }
+        if(dx*dx+dz*dz<robotRadius*robotRadius) return true;
     }
     return false;
 }
@@ -132,7 +166,6 @@ const Target& Environment::getTarget() const{
 const std::vector<Obstacle>& Environment::getObstacles() const{
     return obstacles;
 }
-
 
 float Environment::castRay(float relativeAngle, float maxRange) const{
 
@@ -182,21 +215,24 @@ float Environment::castRay(float relativeAngle, float maxRange) const{
 }
 
 Observation Environment::observe() const{
+    
     Observation obs{};
 
-    constexpr float MAX_RANGE=5.0f;
+    const auto count = sensorConfig.rayCount;
+    const float fov = sensorConfig.fieldOfView;
 
-    const std::array<float, 5> angles={
-        -1.5707963f,  // -90 degrees
-        -0.7853982f,  // -45 degrees
-         0.0f,        // forward
-         0.7853982f,  // +45 degrees
-         1.5707963f   // +90 degrees
-    };
+    obs.rayDistances.reserve(count);
 
-    for(std::size_t i=0;i<angles.size();i++) {
-        obs.rayDistances[i]=castRay(angles[i],MAX_RANGE);
+    for(std::size_t i=0;i<count;i++){
+        float angle=0.0f;
+        if(count>1) angle=-fov*0.5f+fov*static_cast<float>(i)/static_cast<float>(count-1);
+        obs.rayDistances.push_back(castRay(angle,sensorConfig.maxRange));
     }
-
     return obs;
+}
+void Environment::setSensorConfig(const SensorConfig& config) {
+    if(config.rayCount<=0) throw std::invalid_argument("Ray count must be positive");
+    if(config.fieldOfView<0.0f || config.fieldOfView>6.28318531f) throw std::invalid_argument("Invalid field of view");
+    if(config.maxRange<=0.0f) throw std::invalid_argument("Max range must be positive");
+    sensorConfig=config;
 }

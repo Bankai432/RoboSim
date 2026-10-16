@@ -1,7 +1,7 @@
 #pragma once
 
-#include<array>
+#include<vector>
 
 struct Observation{
-    std::array<float,5> rayDistances;
+    std::vector<float> rayDistances;
 };
