@@ -4,7 +4,7 @@ RoboSim Lite is a lightweight robotics simulation prototype built with C++ and O
 
 ## Demo
 
-[Watch the RoboSim demo](demo/robosim-demo.mp4)
+[Watch the RoboSim demo](demo/RoboSim_DEMO.mp4)
 
 ## Implemented Features
 
